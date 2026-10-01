@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jogo de Damas Online & Ranking</title>
+  
+  <!-- Fontes e Ícones -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+  <style>
+    :root {
+      --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      --panel-bg: rgba(30, 41, 59, 0.85);
+      --panel-border: rgba(255, 255, 255, 0.1);
+      --accent: #38bdf8;
+      --accent-hover: #0284c7;
+      --text-main: #f8fafc;
+      --board-light: #f1f5f9;
+      --board-dark: #334155;
+      --piece-white: #ffffff;
+      --piece-black: #0f172a;
+      --highlight: rgba(56, 189, 248, 0.6);
+      --gold: #f59e0b;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Poppins', sans-serif;
+      user-select: none;
+    }
+
+    body {
+      background: var(--bg-gradient);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 15px;
+    }
+
+    header {
+      width: 100%;
+      max-width: 1000px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding: 15px 25px;
+      background: var(--panel-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--panel-border);
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand i {
+      font-size: 1.8rem;
+      color: var(--accent);
+    }
+
+    .brand h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .user-profile {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .user-info {
+      text-align: right;
+    }
+
+    .user-name {
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .user-score {
+      font-size: 0.8rem;
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .btn-action {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--panel-border);
+      color: var(--text-main);
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-action:hover {
+      background: var(--accent);
+      color: #0f172a;
+      transform: translateY(-2px);
+    }
+
+    .main-container {
+      display: flex;
+      gap: 25px;
+      max-width: 1000px;
+      width: 100%;
+      align-items: flex-start;
+      justify-content: center;
+    }
+
+    /* Tabuleiro */
+    .game-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .board-container {
+      position: relative;
+      padding: 12px;
+      background: #1e293b;
+      border-radius: 16px;
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5), inset 0 0 10px rgba(255,255,255,0.05);
+      border: 2px solid var(--panel-border);
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(8, minmax(0, 1fr));
+      grid-template-rows: repeat(8, minmax(0, 1fr));
+      width: min(80vw, 480px);
+      height: min(80vw, 480px);
+      border-radius: 8px;
+      overflow: hidden;
+      border: 2px solid #0f172a;
+    }
+
+    .square {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+    }
+
+    .square.light {
+      background-color: var(--board-light);
+    }
+
+    .square.dark {
+      background-color: var(--board-dark);
+    }
+
+    .square.highlight::after {
+      content: '';
+      position: absolute;
+      width: 35%;
+      height: 35%;
+      background-color: var(--highlight);
+      border-radius: 50%;
+      box-shadow: 0 0 12px var(--accent);
+    }
+
+    /* Peças */
+    .piece {
+      width: 78%;
+      height: 78%;
+      border-radius: 50%;
+      cursor: pointer;
+      position: relative;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 2;
+    }
+
+    .piece:hover {
+      transform: scale(1.08);
+    }
+
+    .piece.white {
+      background: radial-gradient(circle at 30% 30%, #ffffff, #cbd5e1);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.4), inset 0 -3px 3px rgba(0,0,0,0.2);
+      border: 1px solid #e2e8f0;
+    }
+
+    .piece.black {
+      background: radial-gradient(circle at 30% 30%, #334155, #0f172a);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.6), inset 0 -3px 3px rgba(255,255,255,0.1);
+      border: 1px solid #1e293b;
+    }
+
+    .piece.selected {
+      box-shadow: 0 0 0 4px var(--accent), 0 6px 12px rgba(0,0,0,0.4);
+      transform: scale(1.1);
+    }
+
+    .piece.king::after {
+      content: '\f521';
+      font-family: 'Font Awesome 6 Free';
+      font-weight: 900;
+      font-size: min(4vw, 22px);
+      color: var(--gold);
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+    }
+
+    /* Painel de Status & Controles */
+    .status-card {
+      background: var(--panel-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      padding: 12px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      gap: 15px;
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .status-badge {
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    .badge-turn {
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--accent);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+
+    /* Painel Lateral (Leaderboard / Configs) */
+    .side-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      min-width: 280px;
+      width: 100%;
+    }
+
+    .panel-box {
+      background: var(--panel-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--panel-border);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    }
+
+    .panel-box h3 {
+      font-size: 1.1rem;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-main);
+      border-bottom: 1px solid var(--panel-border);
+      padding-bottom: 8px;
+    }
+
+    .leaderboard-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 250px;
+      overflow-y: auto;
+    }
+
+    .leaderboard-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 8px;
+      font-size: 0.88rem;
+    }
+
+    .leaderboard-item:nth-child(1) { border-left: 3px solid var(--gold); }
+    .leaderboard-item:nth-child(2) { border-left: 3px solid #94a3b8; }
+    .leaderboard-item:nth-child(3) { border-left: 3px solid #b45309; }
+
+    .player-rank {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .rank-num {
+      font-weight: 700;
+      width: 18px;
+      color: #94a3b8;
+    }
+
+    .game-mode-selector {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    .mode-btn {
+      flex: 1;
+      padding: 8px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--panel-border);
+      color: var(--text-main);
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      text-align: center;
+      transition: all 0.2s;
+    }
+
+    .mode-btn.active {
+      background: var(--accent);
+      color: #0f172a;
+      font-weight: 600;
+      border-color: var(--accent);
+    }
+
+    /* Modal / Auth Popups */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(15, 23, 42, 0.8);
+      backdrop-filter: blur(8px);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .modal-overlay.active {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .auth-card {
+      background: #1e293b;
+      border: 1px solid var(--panel-border);
+      border-radius: 20px;
+      padding: 30px;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+      text-align: center;
+    }
+
+    .auth-card h2 {
+      margin-bottom: 20px;
+      font-size: 1.5rem;
+    }
+
+    .input-group {
+      margin-bottom: 15px;
+      text-align: left;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 0.8rem;
+      margin-bottom: 5px;
+      color: #94a3b8;
+    }
+
+    .input-group input {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: #0f172a;
+      border: 1px solid var(--panel-border);
+      color: white;
+      outline: none;
+      font-size: 0.9rem;
+    }
+
+    .input-group input:focus {
+      border-color: var(--accent);
+    }
+
+    .btn-submit {
+      width: 100%;
+      padding: 12px;
+      background: var(--accent);
+      color: #0f172a;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 10px;
+      transition: background 0.2s;
+    }
+
+    .btn-submit:hover {
+      background: var(--accent-hover);
+    }
+
+    .auth-toggle {
+      margin-top: 15px;
+      font-size: 0.8rem;
+      color: #94a3b8;
+    }
+
+    .auth-toggle span {
+      color: var(--accent);
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
+    @media (max-width: 850px) {
+      .main-container {
+        flex-direction: column;
+        align-items: center;
+      }
+      .side-panel {
+        max-width: min(80vw, 480px);
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <i class="fa-solid fa-chess-board"></i>
+      <h1>Damas Royale</h1>
+    </div>
+    <div class="user-profile">
+      <div class="user-info">
+        <div class="user-name" id="user-display-name">Visitante</div>
+        <div class="user-score" id="user-display-score">Pontos: 0</div>
+      </div>
+      <button class="btn-action" id="auth-btn" onclick="toggleAuthModal()">
+        <i class="fa-solid fa-right-to-bracket"></i> <span id="auth-btn-text">Entrar</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Container Principal -->
+  <div class="main-container">
+    
+    <!-- Tabuleiro e Controles do Jogo -->
+    <div class="game-section">
+      <div class="status-card">
+        <div class="status-item">
+          <span class="status-badge badge-turn" id="turn-indicator">Vez das Brancas</span>
+        </div>
+        <div class="status-item" style="gap: 15px;">
+          <span>⚪ <b id="white-count">12</b></span>
+          <span>⚫ <b id="black-count">12</b></span>
+        </div>
+        <button class="btn-action" onclick="resetGame()">
+          <i class="fa-solid fa-rotate-right"></i> Reiniciar
+        </button>
+      </div>
+
+      <div class="board-container">
+        <div class="board" id="board"></div>
+      </div>
+    </div>
+
+    <!-- Painel Lateral -->
+    <div class="side-panel">
+      <!-- Opções de Jogo -->
+      <div class="panel-box">
+        <h3><i class="fa-solid fa-gamepad"></i> Modo de Jogo</h3>
+        <div class="game-mode-selector">
+          <div class="mode-btn active" id="mode-ai" onclick="setGameMode('ai')">vs Computador</div>
+          <div class="mode-btn" id="mode-local" onclick="setGameMode('local')">2 Jogadores</div>
+        </div>
+      </div>
+
+      <!-- Placar / Ranking -->
+      <div class="panel-box">
+        <h3><i class="fa-solid fa-trophy" style="color: var(--gold);"></i> Ranking Global</h3>
+        <ul class="leaderboard-list" id="leaderboard">
+          <li class="leaderboard-item">Carregando ranking...</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Modal de Autenticação -->
+  <div class="modal-overlay" id="auth-modal">
+    <div class="auth-card">
+      <h2 id="modal-title">Entrar na Conta</h2>
+      <form id="auth-form" onsubmit="handleAuth(event)">
+        <div class="input-group" id="name-group" style="display: none;">
+          <label>Nome de Jogador</label>
+          <input type="text" id="auth-name" placeholder="Seu apelido">
+        </div>
+        <div class="input-group">
+          <label>E-mail</label>
+          <input type="email" id="auth-email" required placeholder="seu@email.com">
+        </div>
+        <div class="input-group">
+          <label>Senha</label>
+          <input type="password" id="auth-password" required placeholder="••••••••">
+        </div>
+        <button type="submit" class="btn-submit" id="auth-submit-btn">Entrar</button>
+      </form>
+      <div class="auth-toggle">
+        <span id="auth-toggle-btn" onclick="switchAuthMode()">Não tem conta? Cadastre-se</span>
+      </div>
+      <button class="btn-action" style="margin: 15px auto 0 auto;" onclick="toggleAuthModal()">Cancelar</button>
+    </div>
+  </div>
+
+  <script>
+    // Configuração do Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyDummyKey_ForCanvas_Environment123",
+      authDomain: "damas-game.firebaseapp.com",
+      projectId: "damas-game",
+      storageBucket: "damas-game.appspot.com",
+      messagingSenderId: "123456789",
+      appId: "1:123456789:web:abcdef123456"
+    };
+
+    // Inicializar Firebase
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    // Estado da Autenticação e Usuário
+    let currentUser = null;
+    let userPoints = 0;
+    let isRegisterMode = false;
+
+    // Estado do Jogo
+    const BOARD_SIZE = 8;
+    let boardState = []; // 0: Vazio, 1: Branca, 2: Preta, 3: Dama Branca, 4: Dama Preta
+    let selectedPiece = null; // {row, col}
+    let validMoves = [];
+    let currentPlayer = 1; // 1: Brancas (Jogador/Início), 2: Pretas
+    let gameMode = 'ai'; // 'ai' ou 'local'
+    let isGameOver = false;
+
+    // Web Audio Synthesizer para Efeitos Sonoros
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playSound(type) {
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      const now = audioCtx.currentTime;
+
+      if (type === 'move') {
+        osc.frequency.setValueAtTime(300, now);
+        osc.frequency.exponentialRampToValueAtTime(150, now + 0.08);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.08);
+        osc.start(now);
+        osc.stop(now + 0.08);
+      } else if (type === 'capture') {
+        osc.frequency.setValueAtTime(600, now);
+        osc.frequency.exponentialRampToValueAtTime(200, now + 0.15);
+        gain.gain.setValueAtTime(0.5, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.15);
+        osc.start(now);
+        osc.stop(now + 0.15);
+      } else if (type === 'king') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(400, now);
+        osc.frequency.setValueAtTime(600, now + 0.1);
+        osc.frequency.setValueAtTime(800, now + 0.2);
+        gain.gain.setValueAtTime(0.4, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
+        osc.start(now);
+        osc.stop(now + 0.3);
+      }
+    }
+
+    // --- Sistema de Autenticação & Firebase ---
+
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        currentUser = user;
+        document.getElementById('auth-btn-text').innerText = 'Sair';
+        loadUserData(user.uid);
+      } else {
+        currentUser = null;
+        document.getElementById('user-display-name').innerText = 'Visitante';
+        document.getElementById('user-display-score').innerText = 'Pontos: 0';
+        document.getElementById('auth-btn-text').innerText = 'Entrar';
+        userPoints = 0;
+      }
+    });
+
+    function loadUserData(uid) {
+      db.collection('users').doc(uid).get().then(doc => {
+        if (doc.exists) {
+          const data = doc.data();
+          document.getElementById('user-display-name').innerText = data.name || 'Jogador';
+          userPoints = data.score || 0;
+          document.getElementById('user-display-score').innerText = `Pontos: ${userPoints}`;
+        } else {
+          // Criar registro inicial
+          const name = currentUser.displayName || currentUser.email.split('@')[0];
+          db.collection('users').doc(uid).set({
+            name: name,
+            score: 0
+          });
+          document.getElementById('user-display-name').innerText = name;
+        }
+      }).catch(err => console.log("Firebase erro ou offline:", err));
+    }
+
+    function addPoints(pts) {
+      userPoints += pts;
+      document.getElementById('user-display-score').innerText = `Pontos: ${userPoints}`;
+      if (currentUser) {
+        db.collection('users').doc(currentUser.uid).update({
+          score: firebase.firestore.FieldValue.increment(pts)
+        }).catch(err => console.log("Erro ao atualizar pontos:", err));
+      }
+    }
+
+    function loadLeaderboard() {
+      db.collection('users').orderBy('score', 'desc').limit(5).get().then(snapshot => {
+        const list = document.getElementById('leaderboard');
+        list.innerHTML = '';
+        let rank = 1;
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          const item = document.createElement('li');
+          item.className = 'leaderboard-item';
+          item.innerHTML = `
+            <div class="player-rank">
+              <span class="rank-num">${rank++}</span>
+              <span>${data.name}</span>
+            </div>
+            <strong>${data.score} pts</strong>
+          `;
+          list.appendChild(item);
+        });
+      }).catch(() => {
+        document.getElementById('leaderboard').innerHTML = '<li class="leaderboard-item">Ranking indisponível (offline)</li>';
+      });
+    }
+
+    function toggleAuthModal() {
+      if (currentUser) {
+        auth.signOut();
+      } else {
+        const modal = document.getElementById('auth-modal');
+        modal.classList.toggle('active');
+      }
+    }
+
+    function switchAuthMode() {
+      isRegisterMode = !isRegisterMode;
+      document.getElementById('modal-title').innerText = isRegisterMode ? 'Criar Conta' : 'Entrar na Conta';
+      document.getElementById('name-group').style.display = isRegisterMode ? 'block' : 'none';
+      document.getElementById('auth-submit-btn').innerText = isRegisterMode ? 'Cadastrar' : 'Entrar';
+      document.getElementById('auth-toggle-btn').innerText = isRegisterMode ? 'Já tem conta? Entre' : 'Não tem conta? Cadastre-se';
+    }
+
+    function handleAuth(e) {
+      e.preventDefault();
+      const email = document.getElementById('auth-email').value;
+      const pass = document.getElementById('auth-password').value;
+      const name = document.getElementById('auth-name').value;
+
+      if (isRegisterMode) {
+        auth.createUserWithEmailAndPassword(email, pass).then(cred => {
+          return db.collection('users').doc(cred.user.uid).set({
+            name: name || email.split('@')[0],
+            score: 0
+          });
+        }).then(() => {
+          toggleAuthModal();
+          loadLeaderboard();
+        }).catch(err => alert(err.message));
+      } else {
+        auth.signInWithEmailAndPassword(email, pass).then(() => {
+          toggleAuthModal();
+          loadLeaderboard();
+        }).catch(err => alert(err.message));
+      }
+    }
+
+    // --- Lógica do Jogo de Damas ---
+
+    function initBoard() {
+      boardState = Array(8).fill(null).map(() => Array(8).fill(0));
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          if ((r + c) % 2 === 1) {
+            if (r < 3) boardState[r][c] = 2; // Pretas
+            else if (r > 4) boardState[r][c] = 1; // Brancas
+          }
+        }
+      }
+      currentPlayer = 1;
+      selectedPiece = null;
+      validMoves = [];
+      isGameOver = false;
+      renderBoard();
+      updateStatus();
+    }
+
+    function renderBoard() {
+      const boardEl = document.getElementById('board');
+      boardEl.innerHTML = '';
+
+      let whiteCount = 0;
+      let blackCount = 0;
+
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const square = document.createElement('div');
+          square.className = `square ${(r + c) % 2 === 0 ? 'light' : 'dark'}`;
+          square.dataset.row = r;
+          square.dataset.col = c;
+
+          const val = boardState[r][c];
+          if (val !== 0) {
+            const piece = document.createElement('div');
+            const isWhite = val === 1 || val === 3;
+            const isKing = val === 3 || val === 4;
+
+            piece.className = `piece ${isWhite ? 'white' : 'black'} ${isKing ? 'king' : ''}`;
+            if (selectedPiece && selectedPiece.row === r && selectedPiece.col === c) {
+              piece.classList.add('selected');
+            }
+
+            if (isWhite) whiteCount++;
+            else blackCount++;
+
+            square.appendChild(piece);
+          }
+
+          // Destacar movimentos válidos
+          if (validMoves.some(m => m.r === r && m.c === c)) {
+            square.classList.add('highlight');
+          }
+
+          square.addEventListener('click', () => handleSquareClick(r, c));
+          boardEl.appendChild(square);
+        }
+      }
+
+      document.getElementById('white-count').innerText = whiteCount;
+      document.getElementById('black-count').innerText = blackCount;
+
+      checkGameOver(whiteCount, blackCount);
+    }
+
+    function handleSquareClick(r, c) {
+      if (isGameOver) return;
+      if (gameMode === 'ai' && currentPlayer === 2) return; // Vez do Computador
+
+      const pieceVal = boardState[r][c];
+      const isCurrentPlayerPiece = (currentPlayer === 1 && (pieceVal === 1 || pieceVal === 3)) ||
+                                   (currentPlayer === 2 && (pieceVal === 2 || pieceVal === 4));
+
+      if (isCurrentPlayerPiece) {
+        selectedPiece = { row: r, col: c };
+        validMoves = getValidMoves(r, c);
+        renderBoard();
+      } else if (selectedPiece && validMoves.some(m => m.r === r && m.c === c)) {
+        movePiece(selectedPiece.row, selectedPiece.col, r, c);
+      }
+    }
+
+    function getValidMoves(r, c) {
+      const piece = boardState[r][c];
+      if (piece === 0) return [];
+
+      const isWhite = piece === 1 || piece === 3;
+      const isKing = piece === 3 || piece === 4;
+      const moves = [];
+
+      // Direções de movimento
+      let dirs = [];
+      if (isKing) {
+        dirs = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+      } else {
+        dirs = isWhite ? [[-1, -1], [-1, 1]] : [[1, -1], [1, 1]];
+      }
+
+      // Checar capturas obrigatorias / normais e movimentos
+      for (let d of dirs) {
+        let nr = r + d[0];
+        let nc = c + d[1];
+
+        if (isInBounds(nr, nc)) {
+          // Movimento simples
+          if (boardState[nr][nc] === 0) {
+            moves.push({ r: nr, c: nc, capture: null });
+          } 
+          // Captura
+          else if (isEnemy(piece, boardState[nr][nc])) {
+            let jumpR = nr + d[0];
+            let jumpC = nc + d[1];
+            if (isInBounds(jumpR, jumpC) && boardState[jumpR][jumpC] === 0) {
+              moves.push({ r: jumpR, c: jumpC, capture: { r: nr, c: nc } });
+            }
+          }
+        }
+      }
+
+      return moves;
+    }
+
+    function isInBounds(r, c) {
+      return r >= 0 && r < 8 && c >= 0 && c < 8;
+    }
+
+    function isEnemy(p1, p2) {
+      if (p1 === 0 || p2 === 0) return false;
+      const p1White = p1 === 1 || p1 === 3;
+      const p2White = p2 === 1 || p2 === 3;
+      return p1White !== p2White;
+    }
+
+    function movePiece(fromR, fromC, toR, toC) {
+      const move = validMoves.find(m => m.r === toR && m.c === toC);
+      if (!move) return;
+
+      const piece = boardState[fromR][fromC];
+      boardState[toR][toC] = piece;
+      boardState[fromR][fromC] = 0;
+
+      let captured = false;
+      if (move.capture) {
+        boardState[move.capture.r][move.capture.c] = 0;
+        captured = true;
+        playSound('capture');
+        if (currentPlayer === 1) addPoints(100); // +100 por captura
+      } else {
+        playSound('move');
+      }
+
+      // Promoção a Dama
+      let promoted = false;
+      if (piece === 1 && toR === 0) {
+        boardState[toR][toC] = 3;
+        promoted = true;
+      } else if (piece === 2 && toR === 7) {
+        boardState[toR][toC] = 4;
+        promoted = true;
+      }
+
+      if (promoted) {
+        playSound('king');
+        if (currentPlayer === 1) addPoints(200); // +200 por Dama
+      }
+
+      selectedPiece = null;
+      validMoves = [];
+
+      // Passar a vez
+      currentPlayer = currentPlayer === 1 ? 2 : 1;
+      updateStatus();
+      renderBoard();
+
+      if (gameMode === 'ai' && currentPlayer === 2 && !isGameOver) {
+        setTimeout(makeAIMove, 600);
+      }
+    }
+
+    function updateStatus() {
+      const turnEl = document.getElementById('turn-indicator');
+      if (currentPlayer === 1) {
+        turnEl.innerText = "Vez das Brancas (Você)";
+        turnEl.style.color = "var(--accent)";
+      } else {
+        turnEl.innerText = gameMode === 'ai' ? "Vez do Computador..." : "Vez das Pretas";
+        turnEl.style.color = "#f43f5e";
+      }
+    }
+
+    // IA Simples
+    function makeAIMove() {
+      const allMoves = [];
+
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const val = boardState[r][c];
+          if (val === 2 || val === 4) { // Peças Pretas
+            const moves = getValidMoves(r, c);
+            moves.forEach(m => {
+              allMoves.push({ from: { r, c }, to: m });
+            });
+          }
+        }
+      }
+
+      if (allMoves.length === 0) {
+        checkGameOver(0, 1); // Sem movimentos = derrota
+        return;
+      }
+
+      // Priorizar capturas
+      const captures = allMoves.filter(m => m.to.capture !== null);
+      const chosenMove = captures.length > 0 
+        ? captures[Math.floor(Math.random() * captures.length)]
+        : allMoves[Math.floor(Math.random() * allMoves.length)];
+
+      selectedPiece = chosenMove.from;
+      validMoves = [chosenMove.to];
+      movePiece(chosenMove.from.r, chosenMove.from.c, chosenMove.to.r, chosenMove.to.c);
+    }
+
+    function checkGameOver(whiteCount, blackCount) {
+      if (whiteCount === 0 || blackCount === 0) {
+        isGameOver = true;
+        const winner = whiteCount > 0 ? "Brancas (Você)" : "Pretas";
+        setTimeout(() => {
+          alert(`Fim de Jogo! Vitória das ${winner}!`);
+          if (whiteCount > 0) addPoints(500); // +500 por vitória
+        }, 100);
+      }
+    }
+
+    function resetGame() {
+      initBoard();
+    }
+
+    function setGameMode(mode) {
+      gameMode = mode;
+      document.getElementById('mode-ai').classList.toggle('active', mode === 'ai');
+      document.getElementById('mode-local').classList.toggle('active', mode === 'local');
+      resetGame();
+    }
+
+    // Inicialização
+    window.onload = () => {
+      initBoard();
+      loadLeaderboard();
+    };
+  </script>
+</body>
+</html>
